@@ -22,13 +22,18 @@ resource "aws_key_pair" "ec2_key_pair" {
   }
 }
 
+output "private_key_pem" {
+  value = local.payload.service_type == "ec2" ? tls_private_key.ec2_key[0].private_key_pem : null
+  sensitive = true
+}
+
 data "aws_s3_object" "payload" {
   bucket = var.s3_payload_bucket
   key    = var.s3_payload_key
 }
 
 locals {
-  payload = jsonencode(data.aws_s3.object.payload.body)
+  payload = jsondecode(data.aws_s3.object.payload.body)
 
   instance_keys    = local.payload.service_type == "ec2" ? keys(local.payload.instances) : []
   instance_config  = local.payload.service_type == "ec2" ? local.payload.instances[local.instance_keys[0]] : null

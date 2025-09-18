@@ -1,12 +1,12 @@
 pipeline {
     agent any
     parameters {
-        string(name: 'BUCKET', defaultValue: 'thesamuraibucket', description: 'S3 bucket name')
+        string(name: 'BUCKET', defaultValue: 'customer-deployment-configs', description: 'S3 bucket name')
         string(name: 'KEY', defaultValue: '', description: 'Exact S3 object key (leave blank to auto-find latest)')
     }
     environment {
-        AWS_DEFAULT_REGION = 'eu-central-1'
-        JENKINS_URL = "${params.jenkins_url ?: 'https://4585943c559d.ngrok-free.app'}"
+        AWS_DEFAULT_REGION = 'us-east-1'
+        JENKINS_URL = "${params.jenkins_url ?: 'https://a4a2dbea550e.ngrok-free.app'}"
         TIMESTAMP = "${new Date().format('yyyyMMdd_HHmmss')}"
     }
     stages {
@@ -25,7 +25,7 @@ pipeline {
             steps {
                 script {
                     try {
-                        git url: 'https://github.com/NasriMohamedHedi/terraform-infra.git', branch: 'main'
+                        git url: 'https://github.com/sam-lewi/Test-Example.git', branch: 'main'
                     } catch (Exception e) {
                         error "Failed to checkout Git repository: ${e.message}"
                     }
@@ -239,7 +239,7 @@ pipeline {
                             sh "ls -l client-access-key.pem"
                             emailext(
                                 to: clientEmail,
-                                replyTo: 'no-reply@apollo-dojo.com',
+                                replyTo: 'garciasamuiyl@gmail.com',
                                 subject: "🔑 Your VM SSH Credentials",
                                 body: """\
                                     Hello,

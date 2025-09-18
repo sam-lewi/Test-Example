@@ -33,7 +33,7 @@ data "aws_s3_object" "payload" {
 }
 
 locals {
-  payload = jsondecode(data.aws_s3.object.payload.body)
+  payload = jsondecode(data.aws_s3_object.payload.body)
 
   instance_keys    = local.payload.service_type == "ec2" ? keys(local.payload.instances) : []
   instance_config  = local.payload.service_type == "ec2" ? local.payload.instances[local.instance_keys[0]] : null
@@ -49,6 +49,8 @@ module "ec2" {
   security_group_id =  local.instance_config != null ? local.instance_config.security_groups[0] : null
   subnet_id = local.subnet_id
 }
+
+
 
 output "ec2_public_ips" {
   value = local.payload.service_type == "ec2" ? module.ec2[0].public_ips : null

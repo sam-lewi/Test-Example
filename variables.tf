@@ -17,6 +17,6 @@ variable "s3_payload_key" {
 variable "jenkins_url" {
   description = "URL of the Jenkins server"
   type = string
-  default = "https://a4a2dbea550e.ngrok-free.app"
+  default = "https://d20e58836f14.ngrok-free.app"
 }
 

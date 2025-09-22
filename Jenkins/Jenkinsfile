@@ -60,7 +60,7 @@ pipeline {
                 ]]) {
                     script {
                         try {
-                            def downloadResult = sh(script: "aws s3 cp s3://${params.BUCKET}/${env.S3_PAYLOAD_KEY} payload.json || echo 'download_failed'", returnStatus: true)
+                            def downloadResult = bat(script: "aws s3 cp s3://${params.BUCKET}/${env.S3_PAYLOAD_KEY} payload.json || echo 'download_failed'", returnStatus: true)
                             if (downloadResult != 0) {
                                 error "Failed to download payload JSON from s3://${params.BUCKET}/${env.S3_PAYLOAD_KEY}"
                             }
@@ -102,8 +102,8 @@ pipeline {
                         try {
                             def payload = readJSON file: 'payload.json'
                             if (payload.service_type) {
-                                sh "cp backends/backend-${payload.service_type}.tf backend.tf || echo 'No backend file for ${payload.service_type}'"
-                                sh "terraform init -input=false -reconfigure || echo 'Terraform init failed'"
+                                bat "cp backends/backend-${payload.service_type}.tf backend.tf || echo 'No backend file for ${payload.service_type}'"
+                                bat "terraform init -input=false -reconfigure || echo 'Terraform init failed'"
                             } else {
                                 error "Service type not found in payload"
                             }
@@ -126,25 +126,25 @@ pipeline {
                         try {
                             def payload = readJSON file: 'payload.json'
                             echo "Service Type detected: ${payload.service_type}"
-                            sh """
+                            bat """
                                 terraform apply \
                                   -var 's3_payload_bucket=${params.BUCKET}' \
                                   -var 's3_payload_key=${env.S3_PAYLOAD_KEY}' \
                                   -auto-approve || exit 1
                             """
                             if (payload.service_type == 'ec2') {
-                                sh """
+                                bat """
                                     terraform output -raw private_key_pem > client-access-key.pem || exit 1
                                     chmod 400 client-access-key.pem || exit 1
                                 """
                                 archiveArtifacts artifacts: 'client-access-key.pem'
                             } else if (payload.service_type == 'eks') {
-                                def clusterName = sh(script: "terraform output -raw cluster_name || echo 'no_cluster'", returnStdout: true).trim()
+                                def clusterName = bat(script: "terraform output -raw cluster_name || echo 'no_cluster'", returnStdout: true).trim()
                                 if (clusterName == 'no_cluster') {
                                     error "No cluster name output, deployment failed"
                                 } else {
                                     echo "Cluster created: ${clusterName}"
-                                    sh """
+                                    bat """
                                         aws eks update-kubeconfig --name ${clusterName} --region ${AWS_DEFAULT_REGION}
                                         kubectl cluster-info
                                     """
@@ -176,7 +176,7 @@ pipeline {
                                 error "No instances found in payload"
                             }
                             def instance_key = instance_keys[0]
-                            def ip = sh(
+                            def ip = bat(
                                 script: "terraform output -json ec2_public_ips | jq -r '.\"${instance_key}\"' || echo 'no_ip'",
                                 returnStdout: true
                             ).trim()
@@ -187,7 +187,7 @@ pipeline {
                             writeFile file: 'inventory.ini', text: "${ip} ansible_user=ubuntu ansible_ssh_private_key_file=${WORKSPACE}/client-access-key.pem"
                             timeout(time: 30, unit: 'MINUTES') {
                                 retry(10) {
-                                    sh """
+                                    bat """
                                         until ssh -i client-access-key.pem -o StrictHostKeyChecking=no -o ConnectTimeout=30 ubuntu@${ip} 'echo SSH is up' || exit 1; do
                                             echo "Waiting for SSH... (Retrying in 30 seconds)"
                                             sleep 30
@@ -224,7 +224,7 @@ pipeline {
                         try {
                             def payload = readJSON file: 'payload.json'
                             def instance_key = payload.instances.keySet()[0]
-                            def ip = sh(
+                            def ip = bat(
                                 script: "terraform output -json ec2_public_ips | jq -r '.\"${instance_key}\"' || echo 'no_ip'",
                                 returnStdout: true
                             ).trim()
@@ -235,8 +235,8 @@ pipeline {
                             if (!clientEmail) {
                                 error "No client_email found in payload"
                             }
-                            sh "test -f client-access-key.pem || { echo 'Key file missing'; exit 1; }"
-                            sh "ls -l client-access-key.pem"
+                            bat "test -f client-access-key.pem || { echo 'Key file missing'; exit 1; }"
+                            bat "ls -l client-access-key.pem"
                             emailext(
                                 to: clientEmail,
                                 replyTo: 'garciasamuiyl@gmail.com',
@@ -262,7 +262,7 @@ pipeline {
                                 attachmentsPattern: 'client-access-key.pem',
                                 mimeType: 'text/plain'
                             )
-                            def privateKey = sh(script: "terraform output -raw private_key_pem || echo 'no_key'", returnStdout: true).trim()
+                            def privateKey = bat(script: "terraform output -raw private_key_pem || echo 'no_key'", returnStdout: true).trim()
                             if (privateKey == 'no_key') {
                                 error "Failed to retrieve private key from Terraform output"
                             }
@@ -272,8 +272,8 @@ pipeline {
                                 privateKey: privateKey
                             ]
                             def jsonDetails = groovy.json.JsonOutput.toJson(sshDetails)
-                            sh "echo '${jsonDetails}' > ssh_details.json"
-                            sh "aws s3 cp ssh_details.json s3://${params.BUCKET}/ssh_details_${env.TIMESTAMP}.json || exit 1"
+                            bat "echo '${jsonDetails}' > ssh_details.json"
+                            bat "aws s3 cp ssh_details.json s3://${params.BUCKET}/ssh_details_${env.TIMESTAMP}.json || exit 1"
                         } catch (Exception e) {
                             error "Failed to send SSH details: ${e.message}"
                         }
@@ -286,7 +286,7 @@ pipeline {
         always {
             script {
                 try {
-                    sh 'rm -f /tmp/client-access-key.pem outputs.json client-access-key.pem payload.json inventory.ini ssh_details.json || true'
+                    bat 'rm -f /tmp/client-access-key.pem outputs.json client-access-key.pem payload.json inventory.ini ssh_details.json || true'
                 } catch (Exception e) {
                     echo "Warning: Failed to clean up files: ${e.message}"
                 }

@@ -102,7 +102,7 @@ pipeline {
                         try {
                             def payload = readJSON file: 'payload.json'
                             if (payload.service_type) {
-                                bat "cp backends/backend-${payload.service_type}.tf backend.tf || echo 'No backend file for ${payload.service_type}'"
+                                bat "copy backends/backend-${payload.service_type}.tf backend.tf || echo 'No backend file for ${payload.service_type}'"
                                 bat "terraform init -input=false -reconfigure || echo 'Terraform init failed'"
                             } else {
                                 error "Service type not found in payload"
@@ -286,7 +286,7 @@ pipeline {
         always {
             script {
                 try {
-                    bat 'rm -f /tmp/client-access-key.pem outputs.json client-access-key.pem payload.json inventory.ini ssh_details.json || true'
+                    bat 'del -f /tmp/client-access-key.pem outputs.json client-access-key.pem payload.json inventory.ini ssh_details.json || true'
                 } catch (Exception e) {
                     echo "Warning: Failed to clean up files: ${e.message}"
                 }

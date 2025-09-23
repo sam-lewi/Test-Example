@@ -135,7 +135,7 @@ pipeline {
                             if (payload.service_type == 'ec2') {
                                 bat """
                                     terraform output -raw private_key_pem > client-access-key.pem || exit 1
-                                    bat "echo Private key saved successfully" || exit 1
+                                    echo Private key saved successfully || exit 1
                                 """
                                 archiveArtifacts artifacts: 'client-access-key.pem'
                             } else if (payload.service_type == 'eks') {

@@ -176,10 +176,14 @@ pipeline {
                                 error "No instances found in payload"
                             }
                             def instance_key = instance_keys[0]
-                            def ip = bat(
-                                script: "terraform output -json ec2_public_ips | jq -r '.\"${instance_key}\"' || echo 'no_ip'",
-                                returnStdout: true
-                            ).trim()
+                            def ip = powershell(script: '''
+                                $output = terraform output -json ec2_public_ips | ConvertFrom-Json
+                                if ($output."my-server") { 
+                                    Write-Output $output."my-server" 
+                                } else { 
+                                    Write-Output "no_ip" 
+                                }
+                            ''', returnStdout: true).trim()
                             if (ip == 'no_ip' || !ip) {
                                 error "No IP found for instance ${instance_key}"
                             }

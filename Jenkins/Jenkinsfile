@@ -127,10 +127,10 @@ pipeline {
                             def payload = readJSON file: 'payload.json'
                             echo "Service Type detected: ${payload.service_type}"
                             bat """
-                                terraform apply \
-                                  -var 's3_payload_bucket=${params.BUCKET}' \
-                                  -var 's3_payload_key=${env.S3_PAYLOAD_KEY}' \
-                                  -auto-approve || exit 1
+                                terraform apply ^
+                                  -var "s3_payload_bucket=${params.BUCKET}" ^
+                                  -var "s3_payload_key=${env.S3_PAYLOAD_KEY}" ^
+                                  -auto-approve
                             """
                             if (payload.service_type == 'ec2') {
                                 bat """
@@ -286,7 +286,7 @@ pipeline {
         always {
             script {
                 try {
-                    bat 'del -f /tmp/client-access-key.pem outputs.json client-access-key.pem payload.json inventory.ini ssh_details.json || true'
+                    bat 'del /Q client-access-key.pem payload.json inventory.ini ssh_details.json 2>nul || exit /b 0'
                 } catch (Exception e) {
                     echo "Warning: Failed to clean up files: ${e.message}"
                 }

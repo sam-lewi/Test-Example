@@ -36,8 +36,8 @@ pipeline {
             steps {
                 script {
                     def s3Key = "customer-123_ai_output_1703123456.json"
-                    env.S3_KEY = s3Key  // Store in environment variable
-                    echo "Using provided S3 key: ${env.S3_KEY}"
+                    env.S3_KEY = s3Key
+                    echo "Using provided S3 key: ${s3Key}"
                 }
             }
         }
@@ -51,7 +51,7 @@ pipeline {
                 ]]) {
                     script {
                         try {
-                            def downloadResult = sh(script: "aws s3 cp s3://${params.BUCKET}/${env.S3_PAYLOAD_KEY} payload.json || echo 'download_failed'", returnStatus: true)
+                            def downloadResult = sh(script: "aws s3 cp s3://customer-deployment-configs/${env.S3_KEY} payload.json || echo 'download_failed'", returnStatus: true)
                             if (downloadResult != 0) {
                                 error "Failed to download payload JSON from s3://${params.BUCKET}/${env.S3_PAYLOAD_KEY}"
                             }
@@ -120,8 +120,7 @@ pipeline {
                             sh """terraform apply \\
                                 -var "s3_payload_bucket=customer-deployment-configs" \\
                                 -var "s3_payload_key=${env.S3_KEY}" \\
-                                -auto-approv
-                            """
+                                -auto-approve"""
                             if (payload.service_type == 'ec2') {
                                 sh """
                                     terraform output -raw private_key_pem > client-access-key.pem || exit 1

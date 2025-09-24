@@ -102,7 +102,7 @@ pipeline {
                         try {
                             def payload = readJSON file: 'payload.json'
                             if (payload.service_type) {
-                                sh "copy backends/backend-${payload.service_type}.tf backend.tf || echo 'No backend file for ${payload.service_type}'"
+                                sh "cp backends/backend-${payload.service_type}.tf backend.tf || echo 'No backend file for ${payload.service_type}'"
                                 sh "terraform init -input=false -reconfigure || echo 'Terraform init failed'"
                             } else {
                                 error "Service type not found in payload"
@@ -126,11 +126,10 @@ pipeline {
                         try {
                             def payload = readJSON file: 'payload.json'
                             echo "Service Type detected: ${payload.service_type}"
-                            sh """
-                                terraform apply ^
-                                  -var "s3_payload_bucket=${params.BUCKET}" ^
-                                  -var "s3_payload_key=${env.S3_PAYLOAD_KEY}" ^
-                                  -auto-approve
+                            sh """terraform apply \\
+                                -var "s3_payload_bucket=customer-deployment-configs" \\
+                                -var "s3_payload_key=${s3Key}" \\
+                                -auto-approv
                             """
                             if (payload.service_type == 'ec2') {
                                 sh """
@@ -291,9 +290,9 @@ pipeline {
         always {
             script {
                 try {
-                    sh 'del /Q client-access-key.pem payload.json inventory.ini ssh_details.json 2>nul || exit /b 0'
+                    sh "sh rm -f client-access-key.pem payload.json inventory.ini ssh_details.json || true"
                 } catch (Exception e) {
-                    echo "Warning: Failed to clean up files: ${e.message}"
+                    echo "Pipeline failed. Check logs for details."
                 }
             }
         }

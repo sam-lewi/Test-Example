@@ -191,11 +191,19 @@ pipeline {
                             writeFile file: 'inventory.ini', text: "${ip} ansible_user=ubuntu ansible_ssh_private_key_file=${WORKSPACE}/client-access-key.pem"
                             timeout(time: 30, unit: 'MINUTES') {
                                 retry(10) {
-                                    bat """
-                                        until ssh -i client-access-key.pem -o StrictHostKeyChecking=no -o ConnectTimeout=30 ubuntu@${ip} 'echo SSH is up' || exit 1; do
-                                            echo "Waiting for SSH... (Retrying in 30 seconds)"
-                                            sleep 30
-                                        done
+                                    powershell """
+                                        try {
+                                            ssh -i client-access-key.pem -o StrictHostKeyChecking=no -o ConnectTimeout=10 ubuntu@${ip} 'echo SSH is up'
+                                            if (\$LASTEXITCODE -eq 0) {
+                                                Write-Output "SSH connection successful"
+                                            } else {
+                                                throw "SSH failed"
+                                            }
+                                        } catch {
+                                            Write-Output "SSH attempt failed, will retry..."
+                                            Start-Sleep 30
+                                            throw
+                                        }
                                     """
                                 }
                             }

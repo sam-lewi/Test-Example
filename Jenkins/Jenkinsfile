@@ -172,7 +172,11 @@ pipeline {
                             if (ip == 'no_ip' || !ip) {
                                 error "No IP found for instance ${instance_key}"
                             }
-                            def toolsList = payload.instances[instance_key].tools_to_install ?: []
+                            def toolsList = payload.tools_to_install ?: []
+                            echo "Tools to install: ${toolsList}"
+
+                            sh "chmod 600 client-access-key.pem"
+                            
                             writeFile file: 'inventory.ini', text: "${ip} ansible_user=ubuntu ansible_ssh_private_key_file=${WORKSPACE}/client-access-key.pem"
                             timeout(time: 30, unit: 'MINUTES') {
                                 retry(10) {

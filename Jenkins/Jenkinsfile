@@ -164,18 +164,19 @@ pipeline {
                             if (instance_keys.isEmpty()) {
                                 error "No instances found in payload"
                             }
-                            def instance_key = instance_keys[0]
+                            def instance_key = instance_keys.iterator().next()
+                            def toolsList = payload.instances[instance_key].tools_to_install ?: []
+
                             def ip = sh(
                                 script: "terraform output -json ec2_public_ips | jq -r '.\"${instance_key}\"' || echo 'no_ip'",
                                 returnStdout: true
                             ).trim()
+
                             if (ip == 'no_ip' || !ip) {
                                 error "No IP found for instance ${instance_key}"
                             }
 
-                            def instance_key = instance_keys.iterator().next()
-                            def toolsList = payload.instances[instance_key].tools_to_install ?: []
-
+                            echo "Instance: ${instance_key}, IP: ${ip}"
                             echo "Tools to install: ${toolsList}"
 
 

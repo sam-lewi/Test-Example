@@ -160,7 +160,7 @@ pipeline {
                     script {
                         try {
                             def payload = readJSON file: 'payload.json'
-                            def instance_keys = payload.instances.keySet()
+                            def instance_key = payload.instances.keySet().iterator().next()
                             if (instance_keys.isEmpty()) {
                                 error "No instances found in payload"
                             }
@@ -172,36 +172,12 @@ pipeline {
                             if (ip == 'no_ip' || !ip) {
                                 error "No IP found for instance ${instance_key}"
                             }
+
+                            
                             def toolsList = payload.instances[instance_key].tools_to_install ?: []
 
-                            echo "Ensuring EC2 instance is ready before SSH attempts..."
-                            sh """
-                                # Fixed AWS wait command (no timeout parameter)
-                                aws ec2 wait instance-status-ok --instance-ids i-014e6ad7143742977 || echo "Status check failed, continuing..."
-                                sleep 60
-                                
-                                # Diagnostic checks
-                                echo "=== DIAGNOSTIC INFORMATION ==="
-                                
-                                # Check if instance is actually running
-                                aws ec2 describe-instances --instance-ids i-014e6ad7143742977 --query 'Reservations[0].Instances[0].State.Name' --output text
-                                
-                                # Check security groups
-                                aws ec2 describe-instances --instance-ids i-014e6ad7143742977 --query 'Reservations[0].Instances[0].SecurityGroups[0].GroupId' --output text
-                                
-                                # Test basic connectivity
-                                ping -c 3 52.91.209.28 || echo "Ping failed"
-                                
-                                # Test if port 22 is reachable 
-                                nc -z -v -w5 52.91.209.28 22 || echo "Port 22 not reachable"
-                                
-                                # Check our public IP
-                                echo "Jenkins server IP: \$(curl -s ifconfig.me)"
-                                
-                                # Verify SSH key permissions
-                                ls -la client-access-key.pem
-                                chmod 600 client-access-key.pem
-                            """
+                            echo "Tools to install: ${toolsList}"
+
 
                             writeFile file: 'inventory.ini', text: "${ip} ansible_user=ubuntu ansible_ssh_private_key_file=${WORKSPACE}/client-access-key.pem"
                             timeout(time: 30, unit: 'MINUTES') {
@@ -221,6 +197,15 @@ pipeline {
                                     tools_to_install: toolsList
                                 ]
                             )
+
+                            sh """
+                                echo "Verifying dynamic tool installation..."
+                                ssh -i client-access-key.pem -o StrictHostKeyChecking=no ubuntu@${ip} '
+                                    echo "Checking tools from payload:"
+                                    ${toolsList.collect { "which $it && echo '✅ $it installed' || echo '❌ $it missing'" }.join('\n')}
+                                '
+                            """
+
                         } catch (Exception e) {
                             error "Failed to install tools with Ansible: ${e.message}"
                         }

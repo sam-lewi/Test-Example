@@ -173,6 +173,16 @@ pipeline {
                                 error "No IP found for instance ${instance_key}"
                             }
                             def toolsList = payload.instances[instance_key].tools_to_install ?: []
+
+                            echo "Ensuring EC2 instance is ready before SSH attempts..."
+                            sh """
+                                # Wait for instance status checks to pass
+                                aws ec2 wait instance-status-ok --instance-ids ${instanceId} --timeout=600 || echo "Status check timeout, continuing..."
+                                
+                                # Brief additional wait for SSH daemon
+                                sleep 60
+                            """
+                            
                             writeFile file: 'inventory.ini', text: "${ip} ansible_user=ubuntu ansible_ssh_private_key_file=${WORKSPACE}/client-access-key.pem"
                             timeout(time: 30, unit: 'MINUTES') {
                                 retry(10) {

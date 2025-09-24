@@ -160,7 +160,7 @@ pipeline {
                     script {
                         try {
                             def payload = readJSON file: 'payload.json'
-                            def instance_key = payload.instances.keySet().iterator().next()
+                            def instance_keys = payload.instances.keySet()
                             if (instance_keys.isEmpty()) {
                                 error "No instances found in payload"
                             }
@@ -173,7 +173,7 @@ pipeline {
                                 error "No IP found for instance ${instance_key}"
                             }
 
-                            
+                            def instance_key = instance_keys.iterator().next()
                             def toolsList = payload.instances[instance_key].tools_to_install ?: []
 
                             echo "Tools to install: ${toolsList}"

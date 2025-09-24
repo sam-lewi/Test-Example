@@ -175,16 +175,8 @@ pipeline {
                             def instance_key = instance_keys[0]
                             def ip = powershell(script: '''
                                 $output = terraform output -json ec2_public_ips | ConvertFrom-Json
-                                if ($output."my-server") { 
-                                    Write-Output $output."my-server" 
-                                } else { 
-                                    Write-Output "no_ip" 
-                                }
+                                Write-Output $output."my-server"
                             ''', returnStdout: true).trim()
-                            
-                            if (!ip || ip == 'no_ip') {
-                                error "No IP found for instance ${instance_key}"
-                            }
                             
                             def toolsList = payload.instances[instance_key].tools_to_install ?: []
                             def toolsListStr = toolsList.collect { "\"$it\"" }.join(',')
@@ -192,23 +184,25 @@ pipeline {
                             echo "Instance IP: ${ip}"
                             echo "Tools to install: ${toolsList.join(', ')}"
                             
-                            // Copy private key to WSL accessible location
+                            // Copy private key to WSL /tmp directory
                             bat """
-                                copy client-access-key.pem \\\\wsl\$\\Ubuntu\\tmp\\client-access-key.pem 2>nul || echo "Key copied"
+                                wsl cp /mnt/c/ProgramData/Jenkins/.jenkins/workspace/infrastructure-deployment/client-access-key.pem /tmp/client-access-key.pem
+                                wsl chmod 400 /tmp/client-access-key.pem
                             """
                             
-                            // Wait for SSH and run Ansible via WSL
-                            timeout(time: 30, unit: 'MINUTES') {
-                                retry(10) {
+                            // Wait for SSH to be ready
+                            timeout(time: 10, unit: 'MINUTES') {
+                                retry(20) {
                                     bat """
-                                        wsl bash -c "chmod 400 /tmp/client-access-key.pem && ssh -i /tmp/client-access-key.pem -o StrictHostKeyChecking=no -o ConnectTimeout=10 ubuntu@${ip} 'echo SSH ready' || exit 1"
+                                        wsl ssh -i /tmp/client-access-key.pem -o StrictHostKeyChecking=no -o ConnectTimeout=10 ubuntu@${ip} "echo SSH ready" || exit 1
                                     """
+                                    bat "timeout /t 15 /nobreak >nul"
                                 }
                             }
                             
                             // Run Ansible via WSL
                             bat """
-                                wsl bash -c "cd /home/\$USER && ansible-playbook -i '${ip},' -u ubuntu --private-key=/tmp/client-access-key.pem -e 'tools_to_install=[${toolsListStr}]' /home/\$USER/ansible/install_tools.yml"
+                                wsl ansible-playbook -i "${ip}," -u ubuntu --private-key=/tmp/client-access-key.pem -e "tools_to_install=[${toolsListStr}]" /home/sgarcia/ansible/install_tools.yml
                             """
                             
                             echo "Tools installed successfully via WSL Ansible"

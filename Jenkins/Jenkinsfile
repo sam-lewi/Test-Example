@@ -157,86 +157,40 @@ pipeline {
                     accessKeyVariable: 'AWS_ACCESS_KEY_ID',
                     secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
                 ]]) {
-                            try {
+                    script {
+                        try {
                             def payload = readJSON file: 'payload.json'
-                            
-                            // Debug the JSON structure
-                            echo "Full payload structure:"
-                            echo "${payload}"
-                            
                             def instance_keys = payload.instances.keySet()
                             if (instance_keys.isEmpty()) {
                                 error "No instances found in payload"
                             }
-                            
-                            def instance_key = instance_keys.iterator().next()
-                            echo "Processing instance: ${instance_key}"
-                            echo "Instance config: ${payload.instances[instance_key]}"
-                            
-                            // More robust tools extraction
-                            def toolsList = []
-                            if (payload.instances[instance_key].containsKey('tools_to_install')) {
-                                toolsList = payload.instances[instance_key].tools_to_install
-                            } else {
-                                echo "Warning: tools_to_install not found, using defaults"
-                                toolsList = ['htop', 'curl', 'git']
-                            }
-                            
+                            def instance_key = instance_keys[0]
                             def ip = sh(
                                 script: "terraform output -json ec2_public_ips | jq -r '.\"${instance_key}\"' || echo 'no_ip'",
                                 returnStdout: true
                             ).trim()
-                            
                             if (ip == 'no_ip' || !ip) {
                                 error "No IP found for instance ${instance_key}"
                             }
-
-                            echo "Instance: ${instance_key}, IP: ${ip}"
-                            echo "Tools to install: ${toolsList}"
-
-                            // Fix SSH key permissions BEFORE any SSH attempts
-                            sh "chmod 600 client-access-key.pem"
-                            
-                            writeFile file: 'inventory.ini', text: "${ip} ansible_user=ubuntu ansible_ssh_private_key_file=./client-access-key.pem"
-                            
+                            def toolsList = payload.instances[instance_key].tools_to_install ?: []
+                            writeFile file: 'inventory.ini', text: "${ip} ansible_user=ubuntu ansible_ssh_private_key_file=${WORKSPACE}/client-access-key.pem"
                             timeout(time: 30, unit: 'MINUTES') {
                                 retry(10) {
                                     sh """
-                                        until ssh -i client-access-key.pem -o StrictHostKeyChecking=no -o ConnectTimeout=30 ubuntu@${ip} 'echo SSH is up'; do
+                                        until ssh -i client-access-key.pem -o StrictHostKeyChecking=no -o ConnectTimeout=30 ubuntu@${ip} 'echo SSH is up' || exit 1; do
                                             echo "Waiting for SSH... (Retrying in 30 seconds)"
                                             sleep 30
                                         done
                                     """
                                 }
                             }
-                            
-                            // Only run Ansible if we have tools to install
-                            if (toolsList && !toolsList.isEmpty()) {
-                                ansiblePlaybook(
-                                    playbook: 'ansible/install_tools.yml',
-                                    inventory: 'inventory.ini',
-                                    extraVars: [
-                                        tools_to_install: toolsList
-                                    ]
-                                )
-
-                                // Verify installation
-                                echo "Verifying tool installation..."
-                                for (tool in toolsList) {
-                                    sh """
-                                        ssh -i client-access-key.pem -o StrictHostKeyChecking=no ubuntu@${ip} '
-                                            if which ${tool} >/dev/null 2>&1; then
-                                                echo "✅ ${tool} installed"
-                                            else
-                                                echo "❌ ${tool} missing"
-                                            fi
-                                        '
-                                    """
-                                }
-                            } else {
-                                echo "No tools specified for installation"
-                            }
-                            
+                            ansiblePlaybook(
+                                playbook: 'ansible/install_tools.yml',
+                                inventory: 'inventory.ini',
+                                extraVars: [
+                                    tools_to_install: toolsList
+                                ]
+                            )
                         } catch (Exception e) {
                             error "Failed to install tools with Ansible: ${e.message}"
                         }

@@ -146,7 +146,7 @@ pipeline {
                 }
             }
         }
-        stage('Install Tools with WSL Ansible') {
+        stage('Install Tools with Ansible') {
             when {
                 expression { env.SERVICE_TYPE == 'ec2' }
             }
@@ -161,43 +161,38 @@ pipeline {
                         try {
                             def payload = readJSON file: 'payload.json'
                             def instance_keys = payload.instances.keySet()
+                            if (instance_keys.isEmpty()) {
+                                error "No instances found in payload"
+                            }
                             def instance_key = instance_keys[0]
-                            def ip = powershell(script: '''
-                                $output = terraform output -json ec2_public_ips | ConvertFrom-Json
-                                Write-Output $output."my-server"
-                            ''', returnStdout: true).trim()
-                            
+                            def ip = sh(
+                                script: "terraform output -json ec2_public_ips | jq -r '.\"${instance_key}\"' || echo 'no_ip'",
+                                returnStdout: true
+                            ).trim()
+                            if (ip == 'no_ip' || !ip) {
+                                error "No IP found for instance ${instance_key}"
+                            }
                             def toolsList = payload.instances[instance_key].tools_to_install ?: []
-                            def toolsListStr = toolsList.collect { "\"$it\"" }.join(',')
-                            
-                            echo "Instance IP: ${ip}"
-                            echo "Tools to install: ${toolsList.join(', ')}"
-                            
-                            // Copy private key to WSL /tmp directory
-                            sh """
-                                wsl cp /mnt/c/ProgramData/Jenkins/.jenkins/workspace/infrastructure-deployment/client-access-key.pem /tmp/client-access-key.pem
-                                wsl chmod 400 /tmp/client-access-key.pem
-                            """
-                            
-                            // Wait for SSH to be ready
-                            timeout(time: 10, unit: 'MINUTES') {
-                                retry(20) {
+                            writeFile file: 'inventory.ini', text: "${ip} ansible_user=ubuntu ansible_ssh_private_key_file=${WORKSPACE}/client-access-key.pem"
+                            timeout(time: 30, unit: 'MINUTES') {
+                                retry(10) {
                                     sh """
-                                        wsl ssh -i /tmp/client-access-key.pem -o StrictHostKeyChecking=no -o ConnectTimeout=10 ubuntu@${ip} "echo SSH ready" || exit 1
+                                        until ssh -i client-access-key.pem -o StrictHostKeyChecking=no -o ConnectTimeout=30 ubuntu@${ip} 'echo SSH is up' || exit 1; do
+                                            echo "Waiting for SSH... (Retrying in 30 seconds)"
+                                            sleep 30
+                                        done
                                     """
-                                    sh "timeout /t 15 /nobreak >nul"
                                 }
                             }
-                            
-                            // Run Ansible via WSL
-                            sh """
-                                wsl ansible-playbook -i "${ip}," -u ubuntu --private-key=/tmp/client-access-key.pem -e "tools_to_install=[${toolsListStr}]" /home/sgarcia/ansible/install_tools.yml
-                            """
-                            
-                            echo "Tools installed successfully via WSL Ansible"
-                            
+                            ansiblePlaybook(
+                                playbook: 'ansible/install_tools.yml',
+                                inventory: 'inventory.ini',
+                                extraVars: [
+                                    tools_to_install: toolsList
+                                ]
+                            )
                         } catch (Exception e) {
-                            error "Failed to install tools with WSL Ansible: ${e.message}"
+                            error "Failed to install tools with Ansible: ${e.message}"
                         }
                     }
                 }
@@ -233,7 +228,7 @@ pipeline {
                             sh "ls -l client-access-key.pem"
                             emailext(
                                 to: clientEmail,
-                                replyTo: 'garciasamuiyl@gmail.com',
+                                replyTo: 'no-reply@apollo-dojo.com',
                                 subject: "🔑 Your VM SSH Credentials",
                                 body: """\
                                     Hello,
@@ -280,9 +275,9 @@ pipeline {
         always {
             script {
                 try {
-                    sh "rm -f client-access-key.pem payload.json inventory.ini ssh_details.json || true"
+                    sh 'rm -f /tmp/client-access-key.pem outputs.json client-access-key.pem payload.json inventory.ini ssh_details.json || true'
                 } catch (Exception e) {
-                    echo "Pipeline failed. Check logs for details."
+                    echo "Warning: Failed to clean up files: ${e.message}"
                 }
             }
         }

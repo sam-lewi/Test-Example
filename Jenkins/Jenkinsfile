@@ -198,7 +198,7 @@ pipeline {
                                 playbook: 'ansible/install_tools.yml',
                                 inventory: 'inventory.ini',
                                 extraVars: [
-                                    tools_to_install: toolsList
+                                    tools_to_install: toolsList.join(',')
                                 ]
                             )
                         } catch (Exception e) {

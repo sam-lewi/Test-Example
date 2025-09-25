@@ -172,8 +172,14 @@ pipeline {
                             if (ip == 'no_ip' || !ip) {
                                 error "No IP found for instance ${instance_key}"
                             }
-                            def toolsList = payload.tools_to_install ?: []
-                            echo "Tools to install: ${toolsList}"
+
+                            def toolsToInstall = []
+                            payload.instances.each { instanceName, instanceConfig ->
+                                if (instanceConfig.tools_to_install) {
+                                    toolsToInstall.addAll(instanceConfig.tools_to_install)
+                                }
+                            }
+                            echo "Tools to install: ${toolsToInstall}"
 
                             sh "chmod 600 client-access-key.pem"
                             
